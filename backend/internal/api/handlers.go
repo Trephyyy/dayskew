@@ -1,0 +1,155 @@
+package api
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strings"
+
+	"github.com/google/uuid"
+
+	"dayskew-backend/internal/db"
+	"dayskew-backend/internal/scheduler"
+	"dayskew-backend/internal/task"
+)
+
+// handlers holds HTTP dependencies (the task store).
+type handlers struct {
+	store *db.Store
+}
+
+// scheduleRequest is the payload for POST /schedule.
+type scheduleRequest struct {
+	CurrentTime int `json:"currentTime"`
+}
+
+func (h *handlers) handleListTasks(w http.ResponseWriter, r *http.Request) {
+	tt, err := h.store.ListTasks()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if tt == nil {
+		tt = []task.Task{}
+	}
+	writeJSON(w, http.StatusOK, tt)
+}
+
+func (h *handlers) handleGetTask(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(r)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid task id")
+		return
+	}
+	t, err := h.store.GetTask(id)
+	if err != nil {
+		writeDBError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, t)
+}
+
+func (h *handlers) handleCreateTask(w http.ResponseWriter, r *http.Request) {
+	var t task.Task
+	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if err := t.Valid(); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	stored, err := h.store.CreateTask(t)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, stored)
+}
+
+func (h *handlers) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(r)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid task id")
+		return
+	}
+	var t task.Task
+	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	t.ID = id
+	if err := t.Valid(); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	stored, err := h.store.UpdateTask(t)
+	if err != nil {
+		writeDBError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stored)
+}
+
+func (h *handlers) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(r)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid task id")
+		return
+	}
+	if err := h.store.DeleteTask(id); err != nil {
+		writeDBError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *handlers) handleSchedule(w http.ResponseWriter, r *http.Request) {
+	var req scheduleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if req.CurrentTime < 0 || req.CurrentTime >= task.MaxMinutes {
+		writeError(w, http.StatusBadRequest, "currentTime must be between 0 and 1439")
+		return
+	}
+	tt, err := h.store.ListTasks()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	res := scheduler.Schedule(tt, req.CurrentTime)
+	writeJSON(w, http.StatusOK, res)
+}
+
+// pathID extracts the :id segment from paths like /tasks/{id}.
+func pathID(r *http.Request) (uuid.UUID, bool) {
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) != 2 {
+		return uuid.Nil, false
+	}
+	id, err := uuid.Parse(parts[1])
+	if err != nil {
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func writeError(w http.ResponseWriter, status int, msg string) {
+	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+func writeDBError(w http.ResponseWriter, err error) {
+	if errors.Is(err, db.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+	writeError(w, http.StatusInternalServerError, err.Error())
+}

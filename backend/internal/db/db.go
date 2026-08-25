@@ -1,8 +1,9 @@
 package db
 
 import (
-	"github.com/jmoiron/sqlx"
 	"dayskew-backend/internal/config"
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 )
 
 // Open creates a Postgres connection (via the lib/pq driver) from config.

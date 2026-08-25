@@ -4,7 +4,8 @@ WORKDIR /repo
 
 COPY . .
 
-RUN go:build
-RUN go:build -o out/migrate cmd/migrate
+RUN go build -o /out/server ./cmd/server
 
-CMD go:run
+EXPOSE 8080
+
+CMD ["/out/server"]

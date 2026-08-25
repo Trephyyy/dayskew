@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"dayskew-backend/internal/config"
@@ -17,7 +18,13 @@ func main() {
 		log.Fatalln("migrate: connection failed:", err)
 	}
 
-	dir := path.Join("..", "..", "db", "migrations")
+	// Resolve the migrations dir relative to the executable so it works
+	// regardless of the current working directory.
+	exe, err := os.Executable()
+	if err != nil {
+		log.Fatalln("migrate: cannot resolve executable path:", err)
+	}
+	dir := path.Join(filepath.Dir(exe), "..", "db", "migrations")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		log.Fatalln("migrate: cannot read migrations dir:", err)
