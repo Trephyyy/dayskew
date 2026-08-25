@@ -1,7 +1,5 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/schedule_result.dart';
@@ -22,12 +20,11 @@ class ApiClient {
 
   static const String _envBaseUrl = String.fromEnvironment('API_BASE_URL');
 
+  /// Production API. The `/api` prefix is stripped by a reverse proxy on the
+  /// server to reach the backend's root routes. Local dev can override with
+  /// `--dart-define=API_BASE_URL=http://10.0.2.2:8080` (emulator host).
   static String get defaultBaseUrl {
     if (_envBaseUrl.isNotEmpty) return _envBaseUrl;
-    // Android emulators reach the host machine through 10.0.2.2.
-    if (!kIsWeb && Platform.isAndroid) return 'http://10.0.2.2:8080';
-    // Production: public domain, the /api prefix is stripped by a reverse
-    // proxy on the server to reach the backend's root routes.
     return 'https://dayskew.danailmihov.com/api';
   }
 
