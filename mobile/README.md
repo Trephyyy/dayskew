@@ -14,6 +14,13 @@ and the Pass 2 conflict Bump Zone per the AGENTS.md design system
   Tomorrow (dismiss), Drop (delete), Override Time (edit).
 - **Task management** — create/edit/drop tasks across all CRUD endpoints.
 
+## Install
+
+Public Android builds are published as GitHub Releases:
+[github.com/Trephyyy/dayskew/releases](https://github.com/Trephyyy/dayskew/releases).
+On a version tag push (`v*`), a workflow builds the APK and attaches
+`DaySkew-<tag>.apk` automatically.
+
 ## Run
 
 ```sh
