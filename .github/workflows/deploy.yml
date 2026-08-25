@@ -9,11 +9,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-test-deploy:
-    runs-on: ubuntu-latest
+  deploy:
+    runs-on: [self-hosted, tse-server]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          path: repo
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -21,55 +23,29 @@ jobs:
           go-version: "1.22"
 
       - name: Test
-        working-directory: backend
+        working-directory: repo/backend
         run: go test ./...
 
       - name: Build server + migrate (linux/amd64)
-        working-directory: backend
+        working-directory: repo/backend
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o out/server  ./cmd/server
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o out/migrate ./cmd/migrate
 
-      - name: Stage artifacts
-        shell: bash
+      - name: Ship migrations (idempotent)
+        working-directory: repo
         run: |
-          mkdir -p /tmp/dayskew-staging
-          cp backend/out/server     /tmp/dayskew-staging/server
-          cp backend/out/migrate    /tmp/dayskew-staging/migrate
+          cp -r backend/db /opt/dayskew/db
 
-      - name: Deploy (ssh + scp)
-        env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-        shell: bash
+      - name: Stage binaries
         run: |
-          set -euo pipefail
+          cp repo/backend/out/server  /opt/dayskew/staging/server
+          cp repo/backend/out/migrate /opt/dayskew/staging/migrate
 
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          cat > ~/.ssh/id_dayskew <<'KEY'
-          ${{ secrets.DEPLOY_SSH_KEY }}
-          KEY
-          chmod 600 ~/.ssh/id_dayskew
+      - name: Deploy (systemd + migrate + restart)
+        run: sudo /opt/dayskew/deploy.sh
 
-          host="$DEPLOY_HOST"
-          port="${DEPLOY_PORT:-22}"
-          user="${DEPLOY_USER:-trephy}"
-
-          SSH_ARGS="-i ~/.ssh/id_dayskew -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -p $port"
-          SSH="ssh $SSH_ARGS $user@$host"
-
-          echo "::group::Upload artifacts"
-          scp $SSH_ARGS /tmp/dayskew-staging/server  $user@$host:/opt/dayskew/staging/server
-          scp $SSH_ARGS /tmp/dayskew-staging/migrate $user@$host:/opt/dayskew/staging/migrate
-          echo "::endgroup::"
-
-          echo "::group::Run remote deploy script"
-          $SSH -- "sudo /opt/dayskew/deploy.sh"
-          echo "::endgroup::"
-
-          echo "::group::Health check"
-          $SSH -- "curl -sf http://localhost:8080/health && echo HEALTH_OK"
-          echo "::endgroup::"
+      - name: Health check
+        run: |
+          curl -sf http://localhost:8080/health && echo "HEALTH_OK"
+          curl -sf http://localhost:8080/tasks && echo "TASKS_OK"
