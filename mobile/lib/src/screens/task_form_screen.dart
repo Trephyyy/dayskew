@@ -22,11 +22,7 @@ class TaskFormScreen extends StatefulWidget {
 }
 
 /// Date assignment mode for a task.
-enum _DateMode {
-  recurring,
-  today,
-  specific,
-}
+enum _DateMode { recurring, today, specific }
 
 class _TaskFormScreenState extends State<TaskFormScreen> {
   final _formKey = GlobalKey<FormState>();
@@ -47,7 +43,9 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     final t = widget.initial;
     _isEditing = t != null;
     _name = TextEditingController(text: t?.name ?? '');
-    _duration = TextEditingController(text: t == null ? '60' : t.duration.toString());
+    _duration = TextEditingController(
+      text: t == null ? '60' : t.duration.toString(),
+    );
     _preferredStart = t?.preferredStart ?? 9 * 60;
     _isStartSensitive = t?.isStartSensitive ?? false;
     _isEndSensitive = t?.isEndSensitive ?? false;
@@ -58,7 +56,8 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       _dateMode = parsed != null ? _DateMode.specific : _DateMode.recurring;
       _specificDate = parsed ?? DateTime.now();
     } else if (widget.preferDate != null) {
-      _dateMode = TimeFormat.isoDate(widget.preferDate!) == TimeFormat.todayIso()
+      _dateMode =
+          TimeFormat.isoDate(widget.preferDate!) == TimeFormat.todayIso()
           ? _DateMode.today
           : _DateMode.specific;
       _specificDate = widget.preferDate!;
@@ -78,7 +77,10 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
   Future<void> _pickTime() async {
     final picked = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay(hour: _preferredStart ~/ 60, minute: _preferredStart % 60),
+      initialTime: TimeOfDay(
+        hour: _preferredStart ~/ 60,
+        minute: _preferredStart % 60,
+      ),
       helpText: 'Preferred start time',
     );
     if (picked != null) {
@@ -95,7 +97,9 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       helpText: 'Schedule this task on',
     );
     if (picked != null) {
-      setState(() => _specificDate = DateTime(picked.year, picked.month, picked.day));
+      setState(
+        () => _specificDate = DateTime(picked.year, picked.month, picked.day),
+      );
     }
   }
 
@@ -128,7 +132,9 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     );
     if (task.isLocked) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('LOCKED event \u2014 anchors the day\u2019s skeleton')),
+        const SnackBar(
+          content: Text('LOCKED event \u2014 anchors the day\u2019s skeleton'),
+        ),
       );
     }
     Navigator.of(context).pop(task);
@@ -138,125 +144,136 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(_isEditing ? 'EDIT TASK' : 'NEW TASK')),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _FieldLabel('NAME'),
-            TextFormField(
-              controller: _name,
-              style: AppTheme.body,
-              decoration: _inputDecoration('e.g. Morning run'),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Name is required' : null,
-            ),
-            const SizedBox(height: 16),
-            _FieldLabel('DURATION (MIN)'),
-            TextFormField(
-              controller: _duration,
-              style: AppTheme.mono,
-              keyboardType: TextInputType.number,
-              decoration: _inputDecoration('e.g. 45'),
-              validator: (v) {
-                final n = int.tryParse(v ?? '');
-                if (n == null || n <= 0) return 'Positive number required';
-                if (_preferredStart + n > 1439) return 'Ends after 23:59';
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            _FieldLabel('PREFERRED START'),
-            _PrefStartTile(
-              label: TimeFormat.hhmmAmPm(_preferredStart),
-              onTap: _pickTime,
-            ),
-            const SizedBox(height: 16),
-            _FieldLabel('PRIORITY'),
-            Row(
-              children: [
-                _PriorityPick(
-                  label: '1 HIGH',
-                  color: AppColors.high,
-                  selected: _priority == 1,
-                  onTap: () => setState(() => _priority = 1),
+      body: SafeArea(
+        top: false,
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
+            children: [
+              _FieldLabel('NAME'),
+              TextFormField(
+                controller: _name,
+                style: AppTheme.body,
+                decoration: _inputDecoration('e.g. Morning run'),
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Name is required' : null,
+              ),
+              const SizedBox(height: 16),
+              _FieldLabel('DURATION (MIN)'),
+              TextFormField(
+                controller: _duration,
+                style: AppTheme.mono,
+                keyboardType: TextInputType.number,
+                decoration: _inputDecoration('e.g. 45'),
+                validator: (v) {
+                  final n = int.tryParse(v ?? '');
+                  if (n == null || n <= 0) return 'Positive number required';
+                  if (_preferredStart + n > 1439) return 'Ends after 23:59';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              _FieldLabel('PREFERRED START'),
+              _PrefStartTile(
+                label: TimeFormat.hhmmAmPm(_preferredStart),
+                onTap: _pickTime,
+              ),
+              const SizedBox(height: 16),
+              _FieldLabel('PRIORITY'),
+              Row(
+                children: [
+                  _PriorityPick(
+                    label: '1 HIGH',
+                    color: AppColors.high,
+                    selected: _priority == 1,
+                    onTap: () => setState(() => _priority = 1),
+                  ),
+                  const SizedBox(width: 8),
+                  _PriorityPick(
+                    label: '2 MED',
+                    color: AppColors.medium,
+                    selected: _priority == 2,
+                    onTap: () => setState(() => _priority = 2),
+                  ),
+                  const SizedBox(width: 8),
+                  _PriorityPick(
+                    label: '3 LOW',
+                    color: AppColors.low,
+                    selected: _priority == 3,
+                    onTap: () => setState(() => _priority = 3),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _FieldLabel('WHEN DOES IT RUN?'),
+              _DateModeSelector(
+                mode: _dateMode,
+                specificDate: _specificDate,
+                onModeChanged: (m) => setState(() => _dateMode = m),
+                onPickDate: _pickSpecificDate,
+              ),
+              const SizedBox(height: 16),
+              _FieldLabel('SENSITIVITY'),
+              SwitchListTile(
+                value: _isStartSensitive,
+                onChanged: (v) => setState(() => _isStartSensitive = v),
+                activeTrackColor: AppColors.high,
+                activeThumbColor: AppColors.canvas,
+                title: const Text(
+                  'Start sensitive',
+                  style: TextStyle(fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(width: 8),
-                _PriorityPick(
-                  label: '2 MED',
-                  color: AppColors.medium,
-                  selected: _priority == 2,
-                  onTap: () => setState(() => _priority = 2),
+                subtitle: Text(
+                  'Cannot begin before ${TimeFormat.hhmm(_preferredStart)}',
+                  style: AppTheme.bodyMuted,
                 ),
-                const SizedBox(width: 8),
-                _PriorityPick(
-                  label: '3 LOW',
-                  color: AppColors.low,
-                  selected: _priority == 3,
-                  onTap: () => setState(() => _priority = 3),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: AppColors.border, width: 2),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                value: _isEndSensitive,
+                onChanged: (v) => setState(() => _isEndSensitive = v),
+                activeTrackColor: AppColors.medium,
+                activeThumbColor: AppColors.canvas,
+                title: const Text(
+                  'End sensitive',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(
+                  'Must finish by ${TimeFormat.hhmm(_preferredStart + (int.tryParse(_duration.text) ?? 0))}',
+                  style: AppTheme.bodyMuted,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: AppColors.border, width: 2),
+                ),
+              ),
+              if (_isStartSensitive && _isEndSensitive) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  '\u26A0 Both flags on = LOCKED event. The scheduler will pin this exactly.',
+                  style: TextStyle(
+                    color: AppColors.conflict,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
-            ),
-            const SizedBox(height: 16),
-            _FieldLabel('WHEN DOES IT RUN?'),
-            _DateModeSelector(
-              mode: _dateMode,
-              specificDate: _specificDate,
-              onModeChanged: (m) => setState(() => _dateMode = m),
-              onPickDate: _pickSpecificDate,
-            ),
-            const SizedBox(height: 16),
-            _FieldLabel('SENSITIVITY'),
-            SwitchListTile(
-              value: _isStartSensitive,
-              onChanged: (v) => setState(() => _isStartSensitive = v),
-              activeTrackColor: AppColors.high,
-              activeThumbColor: AppColors.canvas,
-              title: const Text('Start sensitive',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: Text(
-                'Cannot begin before ${TimeFormat.hhmm(_preferredStart)}',
-                style: AppTheme.bodyMuted,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: AppColors.border, width: 2),
-              ),
-            ),
-            const SizedBox(height: 8),
-            SwitchListTile(
-              value: _isEndSensitive,
-              onChanged: (v) => setState(() => _isEndSensitive = v),
-              activeTrackColor: AppColors.medium,
-              activeThumbColor: AppColors.canvas,
-              title: const Text('End sensitive',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: Text(
-                'Must finish by ${TimeFormat.hhmm(_preferredStart + (int.tryParse(_duration.text) ?? 0))}',
-                style: AppTheme.bodyMuted,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: AppColors.border, width: 2),
-              ),
-            ),
-            if (_isStartSensitive && _isEndSensitive) ...[
-              const SizedBox(height: 8),
-              const Text(
-                '\u26A0 Both flags on = LOCKED event. The scheduler will pin this exactly.',
-                style: TextStyle(color: AppColors.conflict, fontSize: 12, fontWeight: FontWeight.w600),
+              const SizedBox(height: 24),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: NeoButton(
+                  label: _isEditing ? 'SAVE CHANGES' : 'CREATE TASK',
+                  onPressed: _save,
+                  background: AppColors.low,
+                ),
               ),
             ],
-            const SizedBox(height: 24),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: NeoButton(
-                label: _isEditing ? 'SAVE CHANGES' : 'CREATE TASK',
-                onPressed: _save,
-                background: AppColors.low,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -326,9 +343,14 @@ class _PrefStartTile extends StatelessWidget {
           children: [
             const Icon(Icons.schedule, color: AppColors.medium),
             const SizedBox(width: 8),
-            Text(label,
-                style: AppTheme.mono.copyWith(
-                    fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.medium)),
+            Text(
+              label,
+              style: AppTheme.mono.copyWith(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppColors.medium,
+              ),
+            ),
             const Spacer(),
             const Icon(Icons.edit, color: AppColors.textMuted, size: 18),
           ],
@@ -436,8 +458,11 @@ class _DateModeSelector extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.calendar_month_outlined,
-                      color: AppColors.medium, size: 18),
+                  const Icon(
+                    Icons.calendar_month_outlined,
+                    color: AppColors.medium,
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     TimeFormat.isoDate(specificDate),

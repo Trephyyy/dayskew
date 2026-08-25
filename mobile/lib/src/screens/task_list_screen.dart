@@ -29,13 +29,16 @@ class TaskListScreen extends StatelessWidget {
       }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(initial == null ? 'Task created' : 'Task updated')),
+          SnackBar(
+            content: Text(initial == null ? 'Task created' : 'Task updated'),
+          ),
         );
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Save failed: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Save failed: $e')));
       }
     }
   }
@@ -63,13 +66,15 @@ class TaskListScreen extends StatelessWidget {
     try {
       await controller.deleteTask(task.id);
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Task dropped')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Task dropped')));
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
       }
     }
   }
@@ -102,13 +107,16 @@ class TaskListScreen extends StatelessWidget {
           ),
         ],
       ),
-      floatingActionButton: NeoButton(
-        label: 'ADD',
-        onPressed: () => _openForm(context),
-        background: AppColors.medium,
-        foreground: AppColors.canvas,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        leading: const Icon(Icons.add, size: 18),
+      floatingActionButton: SafeArea(
+        top: false,
+        child: NeoButton(
+          label: 'ADD',
+          onPressed: () => _openForm(context),
+          background: AppColors.medium,
+          foreground: AppColors.canvas,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          leading: const Icon(Icons.add, size: 18),
+        ),
       ),
       body: tasks.isEmpty
           ? const _EmptyList()
@@ -117,10 +125,7 @@ class TaskListScreen extends StatelessWidget {
               children: [
                 for (final tier in order)
                   if (groups.containsKey(tier)) ...[
-                    _TierHeader(
-                      tier: tier,
-                      count: groups[tier]!.length,
-                    ),
+                    _TierHeader(tier: tier, count: groups[tier]!.length),
                     for (final t in groups[tier]!)
                       _ListTileTask(
                         task: t,
@@ -143,8 +148,11 @@ class _EmptyList extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.linear_scale_rounded,
-              size: 56, color: AppColors.textMuted),
+          const Icon(
+            Icons.linear_scale_rounded,
+            size: 56,
+            color: AppColors.textMuted,
+          ),
           const SizedBox(height: 12),
           Text('No tasks yet', style: AppTheme.h2),
           const SizedBox(height: 6),
@@ -166,13 +174,13 @@ class _TierHeader extends StatelessWidget {
     final color = tier == 1
         ? AppColors.high
         : tier == 2
-            ? AppColors.medium
-            : AppColors.low;
+        ? AppColors.medium
+        : AppColors.low;
     final title = tier == 1
         ? 'TIER 1 \u00b7 HIGH'
         : tier == 2
-            ? 'TIER 2 \u00b7 MEDIUM'
-            : 'TIER 3 \u00b7 LOW';
+        ? 'TIER 2 \u00b7 MEDIUM'
+        : 'TIER 3 \u00b7 LOW';
     return Padding(
       padding: const EdgeInsets.only(top: 16, bottom: 8),
       child: Row(
@@ -218,7 +226,9 @@ class _ListTileTask extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tier = task.isLocked ? AppColors.lockedBorder : AppColors.forPriority(task.priority);
+    final tier = task.isLocked
+        ? AppColors.lockedBorder
+        : AppColors.forPriority(task.priority);
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -234,13 +244,23 @@ class _ListTileTask extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(width: 4, height: 40, decoration: BoxDecoration(color: tier, borderRadius: BorderRadius.circular(4))),
+            Container(
+              width: 4,
+              height: 40,
+              decoration: BoxDecoration(
+                color: tier,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(task.name, style: AppTheme.body.copyWith(fontWeight: FontWeight.w700)),
+                  Text(
+                    task.name,
+                    style: AppTheme.body.copyWith(fontWeight: FontWeight.w700),
+                  ),
                   const SizedBox(height: 4),
                   Wrap(
                     spacing: 6,
@@ -260,7 +280,9 @@ class _ListTileTask extends StatelessWidget {
                       ),
                       if (task.scheduledDate != null)
                         StickerBadge(
-                          text: TimeFormat.shortDate(task.scheduledDate!).toUpperCase(),
+                          text: TimeFormat.shortDate(
+                            task.scheduledDate!,
+                          ).toUpperCase(),
                           background: AppColors.conflict,
                           fontSize: 9,
                         ),
@@ -272,9 +294,21 @@ class _ListTileTask extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(TimeFormat.hhmm(task.preferredStart), style: AppTheme.mono.copyWith(fontWeight: FontWeight.w800, color: AppColors.medium)),
+                Text(
+                  TimeFormat.hhmm(task.preferredStart),
+                  style: AppTheme.mono.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.medium,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(TimeFormat.longDuration(task.duration), style: AppTheme.mono.copyWith(fontSize: 11, color: AppColors.textMuted)),
+                Text(
+                  TimeFormat.longDuration(task.duration),
+                  style: AppTheme.mono.copyWith(
+                    fontSize: 11,
+                    color: AppColors.textMuted,
+                  ),
+                ),
               ],
             ),
             const SizedBox(width: 4),

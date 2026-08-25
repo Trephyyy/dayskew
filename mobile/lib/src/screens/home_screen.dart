@@ -80,8 +80,9 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Save failed: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Save failed: $e')));
       }
     }
   }
@@ -90,13 +91,51 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       await c.seedSampleDay();
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Sample day loaded')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Sample day loaded')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Seeding failed: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Seeding failed: $e')));
+      }
+    }
+  }
+
+  Future<void> _justWokeUp() async {
+    await c.justWokeUp();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Wake time set to now \u2014 day reflowed.')),
+    );
+  }
+
+  Future<void> _saveDayToCalendar() async {
+    if (c.timeline.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Reflow the day first \u2014 nothing to save.'),
+        ),
+      );
+      return;
+    }
+    try {
+      final result = await c.saveDayToCalendar();
+      if (!mounted) return;
+      final msg = result.failed == 0
+          ? 'Day saved \u00b7 ${result.created} event${result.created == 1 ? '' : 's'} in ${result.calendarName ?? 'DaySkew'}.'
+          : 'Saved ${result.created}, ${result.failed} failed.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not save to calendar: $e'),
+            backgroundColor: const Color(0xFF3A0A12),
+          ),
+        );
       }
     }
   }
@@ -114,9 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             tooltip: 'Manage tasks',
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => TaskListScreen(controller: c),
-              ),
+              MaterialPageRoute(builder: (_) => TaskListScreen(controller: c)),
             ),
             icon: const Icon(Icons.tune),
           ),
@@ -127,77 +164,144 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      floatingActionButton: NeoButton(
-        label: 'NEW TASK',
-        onPressed: () => _openForm(),
-        background: AppColors.medium,
-        foreground: AppColors.canvas,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        leading: const Icon(Icons.add, size: 18),
+      floatingActionButton: SafeArea(
+        top: false,
+        child: NeoButton(
+          label: 'NEW TASK',
+          onPressed: () => _openForm(),
+          background: AppColors.medium,
+          foreground: AppColors.canvas,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          leading: const Icon(Icons.add, size: 18),
+        ),
       ),
-      body: RefreshIndicator(
-        onRefresh: () => c.refresh(),
-        color: AppColors.medium,
-        backgroundColor: AppColors.surface,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-          children: [
-            ReflowHero(
-              wakeTime: c.wakeTime,
-              isReflowing: c.reflowing,
-              onTimeTap: _pickWakeTime,
-              onReflow: _reflow,
-            ),
-            const SizedBox(height: 16),
-            DateStrip(
-              selected: c.selectedDate,
-              onSelected: (d) => c.selectDate(d),
-            ),
-            if (c.error != null) _ErrorBanner(message: c.error!),
-            const SizedBox(height: 20),
-            _SectionHeader(
-              title: 'TIMELINE',
-              trailing:
-                  '${TimeFormat.hhmm(c.wakeTime)} WOKE \u00b7 ${TimeFormat.shortDate(c.selectedDateIso).toUpperCase()}',
-            ),
-            const SizedBox(height: 4),
-            if (c.loading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(child: CircularProgressIndicator(color: AppColors.medium)),
-              )
-            else if (c.tasks.isEmpty)
-              _EmptyDay(onSeed: _seedSampleDay)
-            else if (c.tasksForSelectedDate.isEmpty)
-              _NoTasksForDay(
-                dateLabel: TimeFormat.shortDate(c.selectedDateIso),
-                onAdd: () => _openForm(),
-              )
-            else if (c.timeline.isEmpty && c.conflicts.isEmpty)
-              _NothingToPlace(
-                wakeLabel: TimeFormat.hhmm(c.wakeTime),
-                dateLabel: TimeFormat.shortDate(c.selectedDateIso),
-              )
-            else ...[
-              for (final placed in c.timeline)
-                TimelineTaskCard(
-                  placed: placed,
-                  onTap: () => _openForm(initial: placed.task),
-                ),
-              if (visibleConflicts.isNotEmpty)
-                ConflictDrawer(
-                  conflicts: visibleConflicts,
-                  onDrop: (t) async {
-                    _dismissedConflicts.add(t.id);
-                    setState(() {});
-                    await c.dropConflict(t);
-                  },
-                  onOverride: (t) => _openForm(initial: t),
-                  onTomorrow: (t) {
-                    setState(() => _dismissedConflicts.add(t.id));
-                  },
-                ),
+      body: SafeArea(
+        top: false,
+        child: RefreshIndicator(
+          onRefresh: () => c.refresh(),
+          color: AppColors.medium,
+          backgroundColor: AppColors.surface,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+            children: [
+              ReflowHero(
+                wakeTime: c.wakeTime,
+                isReflowing: c.reflowing,
+                onTimeTap: _pickWakeTime,
+                onReflow: _reflow,
+                onJustWokeUp: _justWokeUp,
+              ),
+              const SizedBox(height: 16),
+              DateStrip(
+                selected: c.selectedDate,
+                onSelected: (d) => c.selectDate(d),
+              ),
+              const SizedBox(height: 12),
+              _SaveDayStrip(
+                enabled: c.timeline.isNotEmpty,
+                onSave: _saveDayToCalendar,
+              ),
+              if (c.error != null) _ErrorBanner(message: c.error!),
+              const SizedBox(height: 20),
+              _SectionHeader(
+                title: 'TIMELINE',
+                trailing:
+                    '${TimeFormat.hhmm(c.wakeTime)} WOKE \u00b7 ${TimeFormat.shortDate(c.selectedDateIso).toUpperCase()}',
+              ),
+              const SizedBox(height: 4),
+              if (c.loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Center(
+                    child: CircularProgressIndicator(color: AppColors.medium),
+                  ),
+                )
+              else if (c.tasks.isEmpty)
+                _EmptyDay(onSeed: _seedSampleDay)
+              else if (c.tasksForSelectedDate.isEmpty)
+                _NoTasksForDay(
+                  dateLabel: TimeFormat.shortDate(c.selectedDateIso),
+                  onAdd: () => _openForm(),
+                )
+              else if (c.timeline.isEmpty && c.conflicts.isEmpty)
+                _NothingToPlace(
+                  wakeLabel: TimeFormat.hhmm(c.wakeTime),
+                  dateLabel: TimeFormat.shortDate(c.selectedDateIso),
+                )
+              else ...[
+                for (final placed in c.timeline)
+                  TimelineTaskCard(
+                    placed: placed,
+                    onTap: () => _openForm(initial: placed.task),
+                  ),
+                if (visibleConflicts.isNotEmpty)
+                  ConflictDrawer(
+                    conflicts: visibleConflicts,
+                    onDrop: (t) async {
+                      _dismissedConflicts.add(t.id);
+                      setState(() {});
+                      await c.dropConflict(t);
+                    },
+                    onOverride: (t) => _openForm(initial: t),
+                    onTomorrow: (t) {
+                      setState(() => _dismissedConflicts.add(t.id));
+                    },
+                  ),
+              ],
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SaveDayStrip extends StatelessWidget {
+  final bool enabled;
+  final VoidCallback onSave;
+
+  const _SaveDayStrip({required this.enabled, required this.onSave});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onSave : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: enabled ? AppColors.surface : AppColors.canvas,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: enabled ? AppColors.low : AppColors.border,
+            width: 2,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.calendar_month_outlined,
+              size: 18,
+              color: enabled ? AppColors.low : AppColors.textMuted,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                enabled
+                    ? 'SAVE COMPUTED DAY TO CALENDAR'
+                    : 'REFLOW FIRST \u2014 NOTHING TO SAVE',
+                style: AppTheme.mono.copyWith(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.6,
+                  color: enabled ? AppColors.low : AppColors.textMuted,
+                ),
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: enabled ? AppColors.low : AppColors.textMuted,
+            ),
           ],
         ),
       ),
@@ -254,8 +358,11 @@ class _EmptyDay extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(Icons.wb_sunny_outlined,
-              size: 44, color: AppColors.conflict),
+          const Icon(
+            Icons.wb_sunny_outlined,
+            size: 44,
+            color: AppColors.conflict,
+          ),
           const SizedBox(height: 12),
           Text('No tasks yet.', style: AppTheme.h2),
           const SizedBox(height: 6),
@@ -296,8 +403,11 @@ class _NoTasksForDay extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(Icons.calendar_today_outlined,
-              size: 44, color: AppColors.textMuted),
+          const Icon(
+            Icons.calendar_today_outlined,
+            size: 44,
+            color: AppColors.textMuted,
+          ),
           const SizedBox(height: 12),
           Text('Nothing planned for $dateLabel', style: AppTheme.h2),
           const SizedBox(height: 6),
@@ -338,8 +448,11 @@ class _NothingToPlace extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(Icons.hourglass_bottom_rounded,
-              size: 44, color: AppColors.textMuted),
+          const Icon(
+            Icons.hourglass_bottom_rounded,
+            size: 44,
+            color: AppColors.textMuted,
+          ),
           const SizedBox(height: 12),
           Text('Nothing fits after $wakeLabel', style: AppTheme.h2),
           const SizedBox(height: 6),

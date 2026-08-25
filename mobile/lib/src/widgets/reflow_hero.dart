@@ -6,12 +6,14 @@ import '../utils/time_format.dart';
 import 'badges.dart';
 import 'neo_button.dart';
 
-/// Tactile wake-up trigger: a big time picker plus the REFLOW DAY action.
+/// Tactile wake-up trigger: a big time picker plus the REFLOW DAY action and
+/// a one-tap "just woke up" shortcut.
 class ReflowHero extends StatelessWidget {
   final int wakeTime;
   final bool isReflowing;
   final VoidCallback onTimeTap;
   final VoidCallback onReflow;
+  final VoidCallback onJustWokeUp;
 
   const ReflowHero({
     super.key,
@@ -19,6 +21,7 @@ class ReflowHero extends StatelessWidget {
     required this.isReflowing,
     required this.onTimeTap,
     required this.onReflow,
+    required this.onJustWokeUp,
   });
 
   @override
@@ -54,9 +57,26 @@ class ReflowHero extends StatelessWidget {
           const SizedBox(height: 16),
           Text('ACTUAL WAKE TIME', style: AppTheme.bodyMuted),
           const SizedBox(height: 4),
-          _TimeButton(
-            label: TimeFormat.hhmmAmPm(wakeTime),
-            onTap: onTimeTap,
+          _TimeButton(label: TimeFormat.hhmmAmPm(wakeTime), onTap: onTimeTap),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: isReflowing ? null : onJustWokeUp,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.flash_on, size: 16, color: AppColors.low),
+                const SizedBox(width: 4),
+                Text(
+                  'JUST WOKE UP \u2014 USE NOW',
+                  style: AppTheme.mono.copyWith(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
+                    color: AppColors.low,
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           Align(
@@ -111,8 +131,11 @@ class _TimeButton extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            const Icon(Icons.edit_calendar_outlined,
-                color: AppColors.textMuted, size: 20),
+            const Icon(
+              Icons.edit_calendar_outlined,
+              color: AppColors.textMuted,
+              size: 20,
+            ),
           ],
         ),
       ),
