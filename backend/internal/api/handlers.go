@@ -18,13 +18,72 @@ type handlers struct {
 	store *db.Store
 }
 
-// scheduleRequest is the payload for POST /schedule.
+// scheduleRequest is the payload for POST /schedule. date is optional: when
+// present it schedules only that calendar day's tasks (YYYY-MM-DD); when
+// absent it schedules every task as a recurring day.
 type scheduleRequest struct {
-	CurrentTime int `json:"currentTime"`
+	CurrentTime int     `json:"currentTime"`
+	Date        *string `json:"date"`
+}
+
+// taskInput is the create/update payload. scheduledDate is a calendar day
+// ("YYYY-MM-DD") or RFC3339 timestamp; null/empty means a recurring daily task.
+type taskInput struct {
+	Name             string  `json:"name"`
+	Duration         int     `json:"duration"`
+	PreferredStart   int     `json:"preferredStart"`
+	IsStartSensitive bool    `json:"isStartSensitive"`
+	IsEndSensitive   bool    `json:"isEndSensitive"`
+	Priority         int     `json:"priority"`
+	ScheduledDate    *string `json:"scheduledDate"`
+	Timezone         string  `json:"timezone"`
+	GoogleEventID    *string `json:"googleEventId"`
+}
+
+// toTask converts a create/update payload into a persistable Task, normalizing
+// the timezone (defaults to UTC) and parsing the optional date.
+func (in taskInput) toTask() (task.Task, error) {
+	t := task.Task{
+		Name:             in.Name,
+		Duration:         in.Duration,
+		PreferredStart:   in.PreferredStart,
+		IsStartSensitive: in.IsStartSensitive,
+		IsEndSensitive:   in.IsEndSensitive,
+		Priority:         in.Priority,
+		Timezone:         "UTC",
+	}
+	if in.Timezone != "" {
+		t.Timezone = in.Timezone
+	}
+	if in.ScheduledDate != nil && *in.ScheduledDate != "" {
+		d, err := task.ParseDateLike(*in.ScheduledDate)
+		if err != nil {
+			return task.Task{}, err
+		}
+		t.ScheduledDate = d
+	}
+	if in.GoogleEventID != nil && *in.GoogleEventID != "" {
+		v := *in.GoogleEventID
+		t.GoogleEventID = &v
+	}
+	return t, nil
 }
 
 func (h *handlers) handleListTasks(w http.ResponseWriter, r *http.Request) {
-	tt, err := h.store.ListTasks()
+	date := r.URL.Query().Get("date")
+	var (
+		tt  []task.Task
+		err error
+	)
+	if date != "" {
+		if _, perr := task.ParseDate(date); perr != nil {
+			writeError(w, http.StatusBadRequest, "date must be a YYYY-MM-DD calendar day")
+			return
+		}
+		tt, err = h.store.ListTasksForDate(date)
+	} else {
+		tt, err = h.store.ListTasks()
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -50,9 +109,14 @@ func (h *handlers) handleGetTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handlers) handleCreateTask(w http.ResponseWriter, r *http.Request) {
-	var t task.Task
-	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+	var in taskInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	t, err := in.toTask()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if err := t.Valid(); err != nil {
@@ -73,9 +137,14 @@ func (h *handlers) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid task id")
 		return
 	}
-	var t task.Task
-	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+	var in taskInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	t, err := in.toTask()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	t.ID = id
@@ -114,7 +183,19 @@ func (h *handlers) handleSchedule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "currentTime must be between 0 and 1439")
 		return
 	}
-	tt, err := h.store.ListTasks()
+	var (
+		tt  []task.Task
+		err error
+	)
+	if req.Date != nil && *req.Date != "" {
+		if _, perr := task.ParseDate(*req.Date); perr != nil {
+			writeError(w, http.StatusBadRequest, "date must be a YYYY-MM-DD calendar day")
+			return
+		}
+		tt, err = h.store.ListTasksForDate(*req.Date)
+	} else {
+		tt, err = h.store.ListTasks()
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

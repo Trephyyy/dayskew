@@ -29,9 +29,9 @@ func NewStore(conn *sqlx.DB) *Store {
 // CreateTask inserts a new task and returns the stored record.
 func (s *Store) CreateTask(t task.Task) (task.Task, error) {
 	const q = `
-INSERT INTO tasks (name, duration, preferred_start, is_start_sensitive, is_end_sensitive, priority)
-VALUES (:name, :duration, :preferred_start, :is_start_sensitive, :is_end_sensitive, :priority)
-RETURNING id, name, duration, preferred_start, is_start_sensitive, is_end_sensitive, priority, created_at, updated_at`
+INSERT INTO tasks (name, duration, preferred_start, is_start_sensitive, is_end_sensitive, priority, scheduled_date, timezone, google_event_id)
+VALUES (:name, :duration, :preferred_start, :is_start_sensitive, :is_end_sensitive, :priority, :scheduled_date, :timezone, :google_event_id)
+RETURNING id, name, duration, preferred_start, is_start_sensitive, is_end_sensitive, priority, scheduled_date, timezone, google_event_id, created_at, updated_at`
 
 	rows, err := s.db.NamedQuery(q, t)
 	if err != nil {
@@ -53,7 +53,7 @@ RETURNING id, name, duration, preferred_start, is_start_sensitive, is_end_sensit
 func (s *Store) GetTask(id uuid.UUID) (task.Task, error) {
 	const q = `
 SELECT id, name, duration, preferred_start, is_start_sensitive, is_end_sensitive,
-       priority, created_at, updated_at
+       priority, scheduled_date, timezone, google_event_id, created_at, updated_at
 FROM tasks WHERE id = $1`
 
 	var t task.Task
@@ -70,11 +70,30 @@ FROM tasks WHERE id = $1`
 func (s *Store) ListTasks() ([]task.Task, error) {
 	const q = `
 SELECT id, name, duration, preferred_start, is_start_sensitive, is_end_sensitive,
-       priority, created_at, updated_at
-FROM tasks ORDER BY preferred_start ASC, priority ASC, name ASC`
+       priority, scheduled_date, timezone, google_event_id, created_at, updated_at
+FROM tasks ORDER BY scheduled_date ASC NULLS FIRST, preferred_start ASC, priority ASC, name ASC`
 
 	tt := []task.Task{}
 	if err := s.db.Select(&tt, q); err != nil {
+		return nil, err
+	}
+	return tt, nil
+}
+
+// ListTasksForDate returns the tasks applicable to a given calendar day:
+// recurring tasks (scheduled_date IS NULL) plus those scheduled exactly on
+// date. date must be a "YYYY-MM-DD" string; the comparison is done in SQL
+// against a date literal to avoid any timezone conversion.
+func (s *Store) ListTasksForDate(date string) ([]task.Task, error) {
+	const q = `
+SELECT id, name, duration, preferred_start, is_start_sensitive, is_end_sensitive,
+       priority, scheduled_date, timezone, google_event_id, created_at, updated_at
+FROM tasks
+WHERE scheduled_date IS NULL OR scheduled_date = $1::date
+ORDER BY scheduled_date ASC NULLS FIRST, preferred_start ASC, priority ASC, name ASC`
+
+	tt := []task.Task{}
+	if err := s.db.Select(&tt, q, date); err != nil {
 		return nil, err
 	}
 	return tt, nil
@@ -90,10 +109,13 @@ UPDATE tasks SET
     is_start_sensitive = :is_start_sensitive,
     is_end_sensitive = :is_end_sensitive,
     priority = :priority,
+    scheduled_date = :scheduled_date,
+    timezone = :timezone,
+    google_event_id = :google_event_id,
     updated_at = now()
 WHERE id = :id
 RETURNING id, name, duration, preferred_start, is_start_sensitive, is_end_sensitive,
-          priority, created_at, updated_at`
+          priority, scheduled_date, timezone, google_event_id, created_at, updated_at`
 
 	rows, err := s.db.NamedQuery(q, t)
 	if err != nil {
