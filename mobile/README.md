@@ -38,6 +38,27 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080
 
 Start the backend with `make compose` from the repo root.
 
+## Google Calendar (Save Day)
+
+"Saving a day" writes the computed timeline into your Google Calendar via the
+Google Calendar API (OAuth). It keeps events in a dedicated **DaySkew**
+calendar that's auto-created on first save.
+
+Requirements:
+1. In [Google Cloud Console](https://console.cloud.google.com):
+   - Enable the **Google Calendar API** for your project.
+   - Create an **OAuth 2.0 Web client ID** (for `GOOGLE_CLIENT_ID` below).
+   - Create an **OAuth 2.0 Android client** for package `dev.dayskew.dayskew`
+     using your release keystore **SHA-1** fingerprint.
+2. Pass the web client id at build time:
+
+```sh
+flutter build apk --release --dart-define=GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com
+```
+
+Without a configured client id, the save button shows an explanatory
+sign-in error instead of silently doing nothing.
+
 ## Layout
 
 - `lib/src/models/` — Task, PlacedTask, ScheduleResult (mirrors the Go API)

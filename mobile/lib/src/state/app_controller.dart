@@ -3,18 +3,18 @@ import 'package:flutter/foundation.dart';
 import '../models/placed_task.dart';
 import '../models/task.dart';
 import '../services/api_client.dart';
-import '../services/calendar_service.dart';
+import '../services/google_calendar_service.dart';
 import '../utils/time_format.dart';
 
 /// Central app state: task collection, the active "wake" time, the selected
 /// calendar day, and the latest computed timeline + conflict list for it.
 class AppController extends ChangeNotifier {
   final ApiClient api;
-  final CalendarService calendar;
+  final GoogleCalendarService calendar;
 
-  AppController({ApiClient? api, CalendarService? calendar})
-    : api = api ?? ApiClient(),
-      calendar = calendar ?? CalendarService();
+  AppController({ApiClient? api, GoogleCalendarService? calendar})
+      : api = api ?? ApiClient(),
+        calendar = calendar ?? GoogleCalendarService();
 
   List<Task> _tasks = [];
   List<PlacedTask> _timeline = [];
@@ -58,9 +58,9 @@ class AppController extends ChangeNotifier {
     await reflow();
   }
 
-  /// Writes the placed timeline for the selected day into the device
-  /// calendar. Returns the number of events created.
-  Future<DaySaveResult> saveDayToCalendar() async {
+  /// Writes the placed timeline for the selected day into the user's Google
+  /// Calendar via the Google Calendar API.
+  Future<DaySaveResult> saveDayToGoogleCalendar() async {
     return calendar.saveDay(date: _selectedDate, timeline: _timeline);
   }
 

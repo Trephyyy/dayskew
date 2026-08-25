@@ -11,7 +11,6 @@ import '../widgets/neo_button.dart';
 import '../widgets/reflow_hero.dart';
 import '../widgets/timeline_task_card.dart';
 import 'task_form_screen.dart';
-import 'task_list_screen.dart';
 
 /// DaySkew home: wake-time hero, day navigator, computed timeline, Bump Zone.
 class HomeScreen extends StatefulWidget {
@@ -25,6 +24,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final Set<String> _dismissedConflicts = {};
+  bool _saving = false;
 
   AppController get c => widget.controller;
 
@@ -107,6 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _saveDayToCalendar() async {
+    if (_saving) return;
     if (c.timeline.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -115,22 +116,29 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       return;
     }
+    setState(() => _saving = true);
     try {
-      final result = await c.saveDayToCalendar();
+      final result = await c.saveDayToGoogleCalendar();
       if (!mounted) return;
       final msg = result.failed == 0
-          ? 'Day saved \u00b7 ${result.created} event${result.created == 1 ? '' : 's'} in ${result.calendarName ?? 'DaySkew'}.'
+          ? 'Saved ${result.created} event${result.created == 1 ? '' : 's'} to Google Calendar.'
           : 'Saved ${result.created}, ${result.failed} failed.';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: const Color(0xFF0E2A1A),
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not save to calendar: $e'),
-            backgroundColor: const Color(0xFF3A0A12),
-          ),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Google Calendar: $e'),
+          backgroundColor: const Color(0xFF3A0A12),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -141,27 +149,6 @@ class _HomeScreenState extends State<HomeScreen> {
         .toList();
 
     return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 16,
-        title: Text(
-          TimeFormat.shortDate(c.selectedDateIso),
-          style: AppTheme.mono.copyWith(
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.5,
-            color: AppColors.textMuted,
-          ),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Manage tasks',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => TaskListScreen(controller: c)),
-            ),
-            icon: const Icon(Icons.tune),
-          ),
-        ],
-      ),
       floatingActionButton: SafeArea(
         top: false,
         child: NeoButton(
@@ -174,7 +161,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       body: SafeArea(
-        top: false,
         child: RefreshIndicator(
           onRefresh: () => c.refresh(),
           color: AppColors.medium,
@@ -196,6 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 12),
               _SaveDayStrip(
                 enabled: c.timeline.isNotEmpty,
+                busy: _saving,
                 onSave: _saveDayToCalendar,
               ),
               if (c.error != null) _ErrorBanner(message: c.error!),
@@ -265,14 +252,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class _SaveDayStrip extends StatelessWidget {
   final bool enabled;
+  final bool busy;
   final VoidCallback onSave;
 
-  const _SaveDayStrip({required this.enabled, required this.onSave});
+  const _SaveDayStrip({
+    required this.enabled,
+    required this.busy,
+    required this.onSave,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: enabled ? onSave : null,
+      onTap: enabled && !busy ? onSave : null,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
@@ -285,17 +277,29 @@ class _SaveDayStrip extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(
-              Icons.calendar_month_outlined,
-              size: 18,
-              color: enabled ? AppColors.low : AppColors.textMuted,
-            ),
+            if (busy)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: AppColors.low,
+                ),
+              )
+            else
+              Icon(
+                Icons.calendar_month_outlined,
+                size: 18,
+                color: enabled ? AppColors.low : AppColors.textMuted,
+              ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                enabled
-                    ? 'SAVE COMPUTED DAY TO CALENDAR'
-                    : 'REFLOW FIRST \u2014 NOTHING TO SAVE',
+                busy
+                    ? 'SAVING TO GOOGLE CALENDAR\u2026'
+                    : enabled
+                        ? 'SAVE DAY TO GOOGLE CALENDAR'
+                        : 'REFLOW FIRST \u2014 NOTHING TO SAVE',
                 style: AppTheme.mono.copyWith(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,

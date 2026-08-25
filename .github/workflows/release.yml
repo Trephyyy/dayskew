@@ -20,7 +20,12 @@ jobs:
 
       - name: Build APK
         working-directory: mobile
-        run: flutter build apk --release
+        run: |
+          if [ -n "${{ secrets.GOOGLE_CLIENT_ID }}" ]; then
+            flutter build apk --release --dart-define=GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+          else
+            flutter build apk --release
+          fi
 
       - name: Rename artifact with tag name
         run: |
