@@ -258,6 +258,12 @@ class _ListTileTask extends StatelessWidget {
                         background: AppColors.forPriority(task.priority),
                         fontSize: 9,
                       ),
+                      if (task.scheduledDate != null)
+                        StickerBadge(
+                          text: TimeFormat.shortDate(task.scheduledDate!).toUpperCase(),
+                          background: AppColors.conflict,
+                          fontSize: 9,
+                        ),
                     ],
                   ),
                 ],

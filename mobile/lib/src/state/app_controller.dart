@@ -3,9 +3,10 @@ import 'package:flutter/foundation.dart';
 import '../models/placed_task.dart';
 import '../models/task.dart';
 import '../services/api_client.dart';
+import '../utils/time_format.dart';
 
-/// Central app state: task collection, the active "wake" time, the latest
-/// computed timeline and the Pass 2 conflict list.
+/// Central app state: task collection, the active "wake" time, the selected
+/// calendar day, and the latest computed timeline + conflict list for it.
 class AppController extends ChangeNotifier {
   final ApiClient api;
 
@@ -15,6 +16,7 @@ class AppController extends ChangeNotifier {
   List<PlacedTask> _timeline = [];
   List<Task> _conflicts = [];
   int _wakeTime = 7 * 60; // default 07:00
+  DateTime _selectedDate = DateTime.now();
   bool _loading = false;
   bool _reflowing = false;
   String? _error;
@@ -23,14 +25,31 @@ class AppController extends ChangeNotifier {
   List<PlacedTask> get timeline => _timeline;
   List<Task> get conflicts => _conflicts;
   int get wakeTime => _wakeTime;
+  DateTime get selectedDate => _selectedDate;
+  String get selectedDateIso => TimeFormat.isoDate(_selectedDate);
   bool get loading => _loading;
   bool get reflowing => _reflowing;
   String? get error => _error;
+
+  /// Tasks applicable to the selected day: recurring plus date-specific.
+  List<Task> get tasksForSelectedDate => tasks
+      .where((t) => t.isRecurring || t.scheduledDate == selectedDateIso)
+      .toList();
 
   void setWakeTime(int minutes) {
     if (_wakeTime == minutes) return;
     _wakeTime = minutes;
     notifyListeners();
+  }
+
+  /// Switches the viewed day (past days allowed so scheduling today's early
+  /// tasks against yesterday's remaining list still works) and reschedules.
+  Future<void> selectDate(DateTime date) async {
+    final d = DateTime(date.year, date.month, date.day);
+    if (d == _selectedDate) return;
+    _selectedDate = d;
+    notifyListeners();
+    await reflow();
   }
 
   Future<void> loadTasks() async {
@@ -52,7 +71,7 @@ class AppController extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      final result = await api.schedule(_wakeTime);
+      final result = await api.schedule(_wakeTime, date: selectedDateIso);
       _timeline = result.timeline;
       _conflicts = result.conflicts;
     } catch (e) {
@@ -63,12 +82,12 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  /// Refreshes tasks then recomputes the schedule. Used after any mutation so
-  /// drops/edits are reflected immediately in the timeline.
+  /// Refreshes tasks then recomputes the schedule for the selected day. Used
+  /// after any mutation so drops/edits are reflected immediately in the timeline.
   Future<void> refresh() async {
     try {
       _tasks = await api.listTasks();
-      final result = await api.schedule(_wakeTime);
+      final result = await api.schedule(_wakeTime, date: selectedDateIso);
       _timeline = result.timeline;
       _conflicts = result.conflicts;
       _error = null;

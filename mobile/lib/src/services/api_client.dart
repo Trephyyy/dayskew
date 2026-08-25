@@ -58,9 +58,13 @@ class ApiClient {
     }
   }
 
-  Future<ScheduleResult> schedule(int currentTime) async {
+  /// Computes the schedule for [date] ("YYYY-MM-DD" or null for the full
+  /// daily task set). When a date is given the backend schedules recurring +
+  /// that day's tasks only.
+  Future<ScheduleResult> schedule(int currentTime, {String? date}) async {
     final json = await _send('POST', '/schedule', body: {
       'currentTime': currentTime,
+      'date': ?date,
     });
     return ScheduleResult.fromJson(json as Map<String, dynamic>);
   }

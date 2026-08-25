@@ -6,13 +6,14 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/time_format.dart';
 import '../widgets/conflict_drawer.dart';
+import '../widgets/date_strip.dart';
 import '../widgets/neo_button.dart';
 import '../widgets/reflow_hero.dart';
 import '../widgets/timeline_task_card.dart';
 import 'task_form_screen.dart';
 import 'task_list_screen.dart';
 
-/// DaySkew home: wake-time hero, computed timeline, and the Bump Zone.
+/// DaySkew home: wake-time hero, day navigator, computed timeline, Bump Zone.
 class HomeScreen extends StatefulWidget {
   final AppController controller;
 
@@ -63,7 +64,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _openForm({Task? initial}) async {
     final result = await Navigator.of(context).push<Task>(
-      MaterialPageRoute(builder: (_) => TaskFormScreen(initial: initial)),
+      MaterialPageRoute(
+        builder: (_) => TaskFormScreen(
+          initial: initial,
+          preferDate: initial == null ? c.selectedDate : null,
+        ),
+      ),
     );
     if (result == null || !mounted) return;
     try {
@@ -142,12 +148,17 @@ class _HomeScreenState extends State<HomeScreen> {
               onTimeTap: _pickWakeTime,
               onReflow: _reflow,
             ),
+            const SizedBox(height: 16),
+            DateStrip(
+              selected: c.selectedDate,
+              onSelected: (d) => c.selectDate(d),
+            ),
             if (c.error != null) _ErrorBanner(message: c.error!),
             const SizedBox(height: 20),
             _SectionHeader(
               title: 'TIMELINE',
               trailing:
-                  '${TimeFormat.hhmm(c.wakeTime)} WOKE',
+                  '${TimeFormat.hhmm(c.wakeTime)} WOKE \u00b7 ${TimeFormat.shortDate(c.selectedDateIso).toUpperCase()}',
             ),
             const SizedBox(height: 4),
             if (c.loading)
@@ -157,8 +168,16 @@ class _HomeScreenState extends State<HomeScreen> {
               )
             else if (c.tasks.isEmpty)
               _EmptyDay(onSeed: _seedSampleDay)
+            else if (c.tasksForSelectedDate.isEmpty)
+              _NoTasksForDay(
+                dateLabel: TimeFormat.shortDate(c.selectedDateIso),
+                onAdd: () => _openForm(),
+              )
             else if (c.timeline.isEmpty && c.conflicts.isEmpty)
-              _NothingToPlace(wakeLabel: TimeFormat.hhmm(c.wakeTime))
+              _NothingToPlace(
+                wakeLabel: TimeFormat.hhmm(c.wakeTime),
+                dateLabel: TimeFormat.shortDate(c.selectedDateIso),
+              )
             else ...[
               for (final placed in c.timeline)
                 TimelineTaskCard(
@@ -238,7 +257,7 @@ class _EmptyDay extends StatelessWidget {
           const Icon(Icons.wb_sunny_outlined,
               size: 44, color: AppColors.conflict),
           const SizedBox(height: 12),
-          Text('No tasks for the day yet.', style: AppTheme.h2),
+          Text('No tasks yet.', style: AppTheme.h2),
           const SizedBox(height: 6),
           Text(
             'Seed a sample day to see the reflow in action, or add your own tasks.',
@@ -259,10 +278,53 @@ class _EmptyDay extends StatelessWidget {
   }
 }
 
+class _NoTasksForDay extends StatelessWidget {
+  final String dateLabel;
+  final VoidCallback onAdd;
+
+  const _NoTasksForDay({required this.dateLabel, required this.onAdd});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border, width: 2),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.calendar_today_outlined,
+              size: 44, color: AppColors.textMuted),
+          const SizedBox(height: 12),
+          Text('Nothing planned for $dateLabel', style: AppTheme.h2),
+          const SizedBox(height: 6),
+          Text(
+            'Recurring tasks on other days don\u2019t apply here. Add a task for this day.',
+            textAlign: TextAlign.center,
+            style: AppTheme.bodyMuted,
+          ),
+          const SizedBox(height: 16),
+          NeoButton(
+            label: 'ADD TASK FOR THIS DAY',
+            onPressed: onAdd,
+            background: AppColors.medium,
+            foreground: AppColors.canvas,
+            fontSize: 13,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _NothingToPlace extends StatelessWidget {
   final String wakeLabel;
+  final String dateLabel;
 
-  const _NothingToPlace({required this.wakeLabel});
+  const _NothingToPlace({required this.wakeLabel, required this.dateLabel});
 
   @override
   Widget build(BuildContext context) {
@@ -282,7 +344,7 @@ class _NothingToPlace extends StatelessWidget {
           Text('Nothing fits after $wakeLabel', style: AppTheme.h2),
           const SizedBox(height: 6),
           Text(
-            'Every task bumped out of the day. Resolve them below or loosen constraints.',
+            'Every task for $dateLabel bumped out of the day. Resolve them below or loosen constraints.',
             textAlign: TextAlign.center,
             style: AppTheme.bodyMuted,
           ),

@@ -1,4 +1,5 @@
-/// Utilities for formatting "minutes since midnight" integers (0-1439).
+/// Utilities for formatting "minutes since midnight" integers (0-1439) and
+/// calendar dates ("YYYY-MM-DD").
 abstract final class TimeFormat {
   /// `09:15` style 24h label.
   static String hhmm(int minutes) {
@@ -41,5 +42,47 @@ abstract final class TimeFormat {
     if (h > 0 && m > 0) return '${h}h ${m}m';
     if (h > 0) return '${h}h';
     return '${m}m';
+  }
+
+  /// "YYYY-MM-DD" for a [DateTime]'s calendar day.
+  static String isoDate(DateTime d) {
+    final m = d.month.toString().padLeft(2, '0');
+    final day = d.day.toString().padLeft(2, '0');
+    return '${d.year}-$m-$day';
+  }
+
+  /// "YYYY-MM-DD" for today.
+  static String todayIso() => isoDate(DateTime.now());
+
+  /// Parses a "YYYY-MM-DD" (or RFC3339) into a DateTime, else null.
+  static DateTime? tryParseDate(String? s) {
+    if (s == null || s.isEmpty) return null;
+    DateTime? t;
+    if (s.contains('T')) {
+      t = DateTime.tryParse(s);
+    } else {
+      t = DateTime.tryParse('${s}T00:00:00');
+    }
+    return t;
+  }
+
+  /// "Tue" style weekday abbrev for a "YYYY-MM-DD" string.
+  static String weekdayAbbrev(String date) {
+    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final d = tryParseDate(date);
+    if (d == null) return '?';
+    // DateTime.weekday: Monday=1.
+    return names[d.weekday - 1];
+  }
+
+  /// "Aug 26" style short label for a "YYYY-MM-DD" string.
+  static String shortDate(String date) {
+    final d = tryParseDate(date);
+    if (d == null) return date;
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[d.month - 1]} ${d.day}';
   }
 }

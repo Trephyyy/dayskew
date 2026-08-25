@@ -2,6 +2,11 @@
 ///
 /// All times are "minutes since midnight" (0-1439). A task with both
 /// sensitivity flags set is a "Locked" event forming the day's skeleton.
+///
+/// [scheduledDate] is the calendar day ("YYYY-MM-DD") the task runs on, or
+/// null for a recurring daily task. [timezone] interprets the minute-of-day
+/// values when syncing to external calendars; [googleEventId] back-references
+/// the synced Google Calendar event once calendar sync is wired up.
 class Task {
   final String id;
   final String name;
@@ -10,6 +15,9 @@ class Task {
   final bool isStartSensitive;
   final bool isEndSensitive;
   final int priority;
+  final String? scheduledDate;
+  final String timezone;
+  final String? googleEventId;
 
   const Task({
     required this.id,
@@ -19,7 +27,13 @@ class Task {
     required this.isStartSensitive,
     required this.isEndSensitive,
     required this.priority,
+    this.scheduledDate,
+    this.timezone = 'UTC',
+    this.googleEventId,
   });
+
+  /// Recurring tasks apply to every day.
+  bool get isRecurring => scheduledDate == null;
 
   /// [id] is filled in by the backend on create.
   Task copyWith({
@@ -30,6 +44,10 @@ class Task {
     bool? isStartSensitive,
     bool? isEndSensitive,
     int? priority,
+    String? scheduledDate,
+    bool clearScheduledDate = false,
+    String? timezone,
+    String? googleEventId,
   }) {
     return Task(
       id: id ?? this.id,
@@ -39,6 +57,9 @@ class Task {
       isStartSensitive: isStartSensitive ?? this.isStartSensitive,
       isEndSensitive: isEndSensitive ?? this.isEndSensitive,
       priority: priority ?? this.priority,
+      scheduledDate: clearScheduledDate ? null : (scheduledDate ?? this.scheduledDate),
+      timezone: timezone ?? this.timezone,
+      googleEventId: googleEventId ?? this.googleEventId,
     );
   }
 
@@ -56,6 +77,9 @@ class Task {
       isStartSensitive: json['isStartSensitive'] as bool,
       isEndSensitive: json['isEndSensitive'] as bool,
       priority: json['priority'] as int,
+      scheduledDate: _normalizeDate(json['scheduledDate']),
+      timezone: json['timezone'] as String? ?? 'UTC',
+      googleEventId: json['googleEventId'] as String?,
     );
   }
 
@@ -67,6 +91,9 @@ class Task {
         'isStartSensitive': isStartSensitive,
         'isEndSensitive': isEndSensitive,
         'priority': priority,
+        'scheduledDate': scheduledDate,
+        'timezone': timezone,
+        'googleEventId': googleEventId,
       };
 
   /// JSON for PUT /tasks/{id}.
@@ -74,4 +101,14 @@ class Task {
         'id': id,
         ...toCreateJson(),
       };
+
+  /// Backend may someday emit "YYYY-MM-DD" or RFC3339; normalize to
+  /// "YYYY-MM-DD" so the app compares dates lexicographically.
+  static String? _normalizeDate(Object? raw) {
+    if (raw == null) return null;
+    final s = raw.toString();
+    if (s.isEmpty) return null;
+    final i = s.indexOf('T');
+    return i > 0 ? s.substring(0, i) : s;
+  }
 }

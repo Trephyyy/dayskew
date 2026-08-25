@@ -32,6 +32,27 @@ void main() {
       expect(TimeFormat.longDuration(60), '1h');
       expect(TimeFormat.longDuration(30), '30m');
     });
+
+    test('isoDate formats calendar days', () {
+      expect(TimeFormat.isoDate(DateTime(2026, 9, 1)), '2026-09-01');
+      expect(TimeFormat.isoDate(DateTime(2026, 12, 31)), '2026-12-31');
+    });
+
+    test('tryParseDate handles YYYY-MM-DD and RFC3339', () {
+      final d1 = TimeFormat.tryParseDate('2026-09-01');
+      expect(d1?.year, 2026);
+      expect(d1?.month, 9);
+      expect(d1?.day, 1);
+      final d2 = TimeFormat.tryParseDate('2026-09-01T00:00:00Z');
+      expect(d2, isNotNull);
+      expect(TimeFormat.tryParseDate('garbage'), isNull);
+    });
+
+    test('shortDate and weekdayAbbrev', () {
+      expect(TimeFormat.shortDate('2026-09-01'), 'Sep 1');
+      expect(TimeFormat.weekdayAbbrev('2026-09-01'), 'Tue');
+      expect(TimeFormat.weekdayAbbrev('nope'), '?');
+    });
   });
 
   group('models', () {
@@ -69,6 +90,39 @@ void main() {
         'priority': 2,
       });
       expect(task.isLocked, true);
+    });
+
+    test('date-scoped task parses scheduledDate and timezone', () {
+      final task = Task.fromJson({
+        'id': 'y',
+        'name': 'Launch',
+        'duration': 60,
+        'preferredStart': 600,
+        'isStartSensitive': false,
+        'isEndSensitive': false,
+        'priority': 1,
+        'scheduledDate': '2026-09-01T00:00:00Z',
+        'timezone': 'Europe/Sofia',
+        'googleEventId': 'abc123',
+      });
+      expect(task.scheduledDate, '2026-09-01');
+      expect(task.timezone, 'Europe/Sofia');
+      expect(task.googleEventId, 'abc123');
+      expect(task.isRecurring, false);
+    });
+
+    test('missing date means recurring', () {
+      final task = Task.fromJson({
+        'id': 'y',
+        'name': 'Daily',
+        'duration': 30,
+        'preferredStart': 540,
+        'isStartSensitive': false,
+        'isEndSensitive': false,
+        'priority': 2,
+      });
+      expect(task.isRecurring, true);
+      expect(task.scheduledDate, isNull);
     });
 
     test('ScheduleResult.fromJson splits timeline from conflicts', () {

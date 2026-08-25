@@ -49,3 +49,5 @@ jobs:
         run: |
           curl -sf http://localhost:8080/health && echo "HEALTH_OK"
           curl -sf http://localhost:8080/tasks && echo "TASKS_OK"
+          # date field present in schema? probe the new API surface.
+          curl -sf -o /dev/null "http://localhost:8080/tasks?date=2026-01-01" && echo "DATE_FILTER_OK"

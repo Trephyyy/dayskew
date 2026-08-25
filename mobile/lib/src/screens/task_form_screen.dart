@@ -8,13 +8,24 @@ import '../widgets/neo_button.dart';
 
 /// Create/edit form for a single task. On save it pops back with a fully
 /// populated [Task] (id kept for edits).
+///
+/// [preferDate] seeds a newly created task onto that calendar day (used when
+/// the home screen is viewing a specific day); null keeps it recurring.
 class TaskFormScreen extends StatefulWidget {
   final Task? initial;
+  final DateTime? preferDate;
 
-  const TaskFormScreen({super.key, this.initial});
+  const TaskFormScreen({super.key, this.initial, this.preferDate});
 
   @override
   State<TaskFormScreen> createState() => _TaskFormScreenState();
+}
+
+/// Date assignment mode for a task.
+enum _DateMode {
+  recurring,
+  today,
+  specific,
 }
 
 class _TaskFormScreenState extends State<TaskFormScreen> {
@@ -27,6 +38,9 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
   late int _priority;
   late final bool _isEditing;
 
+  late _DateMode _dateMode;
+  late DateTime _specificDate;
+
   @override
   void initState() {
     super.initState();
@@ -38,6 +52,20 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     _isStartSensitive = t?.isStartSensitive ?? false;
     _isEndSensitive = t?.isEndSensitive ?? false;
     _priority = t?.priority ?? 2;
+
+    if (t?.scheduledDate != null) {
+      final parsed = TimeFormat.tryParseDate(t!.scheduledDate);
+      _dateMode = parsed != null ? _DateMode.specific : _DateMode.recurring;
+      _specificDate = parsed ?? DateTime.now();
+    } else if (widget.preferDate != null) {
+      _dateMode = TimeFormat.isoDate(widget.preferDate!) == TimeFormat.todayIso()
+          ? _DateMode.today
+          : _DateMode.specific;
+      _specificDate = widget.preferDate!;
+    } else {
+      _dateMode = _DateMode.recurring;
+      _specificDate = DateTime.now();
+    }
   }
 
   @override
@@ -58,9 +86,35 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     }
   }
 
+  Future<void> _pickSpecificDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _specificDate,
+      firstDate: DateTime(DateTime.now().year - 1),
+      lastDate: DateTime(DateTime.now().year + 5),
+      helpText: 'Schedule this task on',
+    );
+    if (picked != null) {
+      setState(() => _specificDate = DateTime(picked.year, picked.month, picked.day));
+    }
+  }
+
+  /// The calendar day to persist, or null for a recurring (every-day) task.
+  String? _resolveDate() {
+    switch (_dateMode) {
+      case _DateMode.recurring:
+        return null;
+      case _DateMode.today:
+        return TimeFormat.todayIso();
+      case _DateMode.specific:
+        return TimeFormat.isoDate(_specificDate);
+    }
+  }
+
   void _save() {
     if (!_formKey.currentState!.validate()) return;
     final duration = int.parse(_duration.text);
+    final scheduled = _resolveDate();
     final task = Task(
       id: widget.initial?.id ?? '',
       name: _name.text.trim(),
@@ -69,6 +123,8 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       isStartSensitive: _isStartSensitive,
       isEndSensitive: _isEndSensitive,
       priority: _priority,
+      scheduledDate: scheduled,
+      timezone: widget.initial?.timezone ?? 'UTC',
     );
     if (task.isLocked) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -140,6 +196,14 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                   onTap: () => setState(() => _priority = 3),
                 ),
               ],
+            ),
+            const SizedBox(height: 16),
+            _FieldLabel('WHEN DOES IT RUN?'),
+            _DateModeSelector(
+              mode: _dateMode,
+              specificDate: _specificDate,
+              onModeChanged: (m) => setState(() => _dateMode = m),
+              onPickDate: _pickSpecificDate,
             ),
             const SizedBox(height: 16),
             _FieldLabel('SENSITIVITY'),
@@ -309,6 +373,125 @@ class _PriorityPick extends StatelessWidget {
           label,
           style: AppTheme.mono.copyWith(
             fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: selected ? AppColors.canvas : AppColors.textMuted,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Segmented control for task date assignment: recurring (every day), today,
+/// or a specific calendar day (future or past).
+class _DateModeSelector extends StatelessWidget {
+  final _DateMode mode;
+  final DateTime specificDate;
+  final ValueChanged<_DateMode> onModeChanged;
+  final VoidCallback onPickDate;
+
+  const _DateModeSelector({
+    required this.mode,
+    required this.specificDate,
+    required this.onModeChanged,
+    required this.onPickDate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _ModeOption(
+              label: 'EVERY DAY',
+              selected: mode == _DateMode.recurring,
+              onTap: () => onModeChanged(_DateMode.recurring),
+            ),
+            const SizedBox(width: 8),
+            _ModeOption(
+              label: 'TODAY',
+              selected: mode == _DateMode.today,
+              onTap: () => onModeChanged(_DateMode.today),
+            ),
+            const SizedBox(width: 8),
+            _ModeOption(
+              label: 'PICK A DAY',
+              selected: mode == _DateMode.specific,
+              onTap: () => onModeChanged(_DateMode.specific),
+            ),
+          ],
+        ),
+        if (mode == _DateMode.specific) ...[
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: onPickDate,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.canvas,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border, width: 2),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_month_outlined,
+                      color: AppColors.medium, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    TimeFormat.isoDate(specificDate),
+                    style: AppTheme.mono.copyWith(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.medium,
+                    ),
+                  ),
+                  const Spacer(),
+                  const Icon(Icons.edit, color: AppColors.textMuted, size: 18),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ModeOption extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ModeOption({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.low : AppColors.canvas,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? AppColors.low : AppColors.border,
+            width: 2,
+          ),
+          boxShadow: selected
+              ? const [BoxShadow(color: AppColors.shadow, offset: Offset(3, 3))]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: AppTheme.mono.copyWith(
+            fontSize: 10,
             fontWeight: FontWeight.w800,
             color: selected ? AppColors.canvas : AppColors.textMuted,
           ),
