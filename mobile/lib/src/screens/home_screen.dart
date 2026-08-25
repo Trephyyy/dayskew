@@ -43,23 +43,9 @@ class _HomeScreenState extends State<HomeScreen> {
       initialTime: TimeOfDay(hour: current ~/ 60, minute: current % 60),
       helpText: 'Actual wake-up time',
     );
-    if (picked != null) c.setWakeTime(picked.hour * 60 + picked.minute);
-  }
-
-  Future<void> _reflow() async {
+    if (picked == null) return;
+    c.setWakeTime(picked.hour * 60 + picked.minute);
     await c.reflow();
-    if (c.error == null && mounted) {
-      final bumped = c.conflicts.length;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            bumped == 0
-                ? 'Day placed \u2014 zero conflicts.'
-                : 'Day placed \u00b7 $bumped task${bumped == 1 ? '' : 's'} bumped.',
-          ),
-        ),
-      );
-    }
   }
 
   Future<void> _openForm({Task? initial}) async {
@@ -77,6 +63,14 @@ class _HomeScreenState extends State<HomeScreen> {
         await c.addTask(result);
       } else {
         await c.updateTask(result.copyWith(id: initial.id));
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(initial == null ? 'Task created' : 'Task updated'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -148,7 +142,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('DAYSKEW'),
+        titleSpacing: 16,
+        title: Text(
+          TimeFormat.shortDate(c.selectedDateIso),
+          style: AppTheme.mono.copyWith(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.5,
+            color: AppColors.textMuted,
+          ),
+        ),
         actions: [
           IconButton(
             tooltip: 'Manage tasks',
@@ -156,11 +159,6 @@ class _HomeScreenState extends State<HomeScreen> {
               MaterialPageRoute(builder: (_) => TaskListScreen(controller: c)),
             ),
             icon: const Icon(Icons.tune),
-          ),
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: c.loading || c.reflowing ? null : () => c.refresh(),
-            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
@@ -187,9 +185,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ReflowHero(
                 wakeTime: c.wakeTime,
                 isReflowing: c.reflowing,
-                onTimeTap: _pickWakeTime,
-                onReflow: _reflow,
                 onJustWokeUp: _justWokeUp,
+                onTimeTap: _pickWakeTime,
               ),
               const SizedBox(height: 16),
               DateStrip(
@@ -229,24 +226,34 @@ class _HomeScreenState extends State<HomeScreen> {
                   dateLabel: TimeFormat.shortDate(c.selectedDateIso),
                 )
               else ...[
-                for (final placed in c.timeline)
-                  TimelineTaskCard(
-                    placed: placed,
-                    onTap: () => _openForm(initial: placed.task),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 260),
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeIn,
+                  child: Column(
+                    key: ValueKey('timeline-${c.scheduleVersion}'),
+                    children: [
+                      for (final placed in c.timeline)
+                        TimelineTaskCard(
+                          placed: placed,
+                          onTap: () => _openForm(initial: placed.task),
+                        ),
+                      if (visibleConflicts.isNotEmpty)
+                        ConflictDrawer(
+                          conflicts: visibleConflicts,
+                          onDrop: (t) async {
+                            _dismissedConflicts.add(t.id);
+                            setState(() {});
+                            await c.dropConflict(t);
+                          },
+                          onOverride: (t) => _openForm(initial: t),
+                          onTomorrow: (t) {
+                            setState(() => _dismissedConflicts.add(t.id));
+                          },
+                        ),
+                    ],
                   ),
-                if (visibleConflicts.isNotEmpty)
-                  ConflictDrawer(
-                    conflicts: visibleConflicts,
-                    onDrop: (t) async {
-                      _dismissedConflicts.add(t.id);
-                      setState(() {});
-                      await c.dropConflict(t);
-                    },
-                    onOverride: (t) => _openForm(initial: t),
-                    onTomorrow: (t) {
-                      setState(() => _dismissedConflicts.add(t.id));
-                    },
-                  ),
+                ),
               ],
             ],
           ),

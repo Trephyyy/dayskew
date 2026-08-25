@@ -9,8 +9,8 @@ import '../widgets/badges.dart';
 import '../widgets/neo_button.dart';
 import 'task_form_screen.dart';
 
-/// Management view: every task in the system grouped by priority tier, with
-/// tap-to-edit and an add FAB. Mirrors the backend `/tasks` endpoints.
+/// Management view for the selected day: recurring + date-specific tasks,
+/// with tap-to-edit and an add FAB.
 class TaskListScreen extends StatelessWidget {
   final AppController controller;
 
@@ -18,7 +18,12 @@ class TaskListScreen extends StatelessWidget {
 
   Future<void> _openForm(BuildContext context, {Task? initial}) async {
     final result = await Navigator.of(context).push<Task>(
-      MaterialPageRoute(builder: (_) => TaskFormScreen(initial: initial)),
+      MaterialPageRoute(
+        builder: (_) => TaskFormScreen(
+          initial: initial,
+          preferDate: initial == null ? controller.selectedDate : null,
+        ),
+      ),
     );
     if (result == null || !context.mounted) return;
     try {
@@ -44,31 +49,18 @@ class TaskListScreen extends StatelessWidget {
   }
 
   Future<void> _delete(BuildContext context, Task task) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Drop this task?'),
-        content: Text('"${task.name}" will be removed from the day.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.high),
-            child: const Text('Drop'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
+    // Inline collapse animation runs in _AnimatedTaskTile._handleDelete before
+    // this is invoked; delete immediately for instant feedback.
     try {
       await controller.deleteTask(task.id);
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Task dropped')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Dropped "${task.name}"'),
+            backgroundColor: const Color(0xFF3A0A12),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     } catch (e) {
       if (context.mounted) {
@@ -81,22 +73,18 @@ class TaskListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tasks = controller.tasks;
-    final groups = <int, List<Task>>{};
-    for (final t in tasks) {
-      groups.putIfAbsent(t.priority, () => []).add(t);
-    }
-    final order = [1, 3, 2]; // render locked/high first, then medium, then low
+    final dayTasks = controller.tasksForSelectedDate;
+    final dateLabel = TimeFormat.shortDate(controller.selectedDateIso);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('TASKS'),
+        title: Text('TASKS \u00b7 $dateLabel'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: Center(
               child: Text(
-                '${tasks.length} TOTAL',
+                '${dayTasks.length}',
                 style: AppTheme.mono.copyWith(
                   fontSize: 11,
                   color: AppColors.textMuted,
@@ -118,23 +106,31 @@ class TaskListScreen extends StatelessWidget {
           leading: const Icon(Icons.add, size: 18),
         ),
       ),
-      body: tasks.isEmpty
-          ? const _EmptyList()
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                for (final tier in order)
-                  if (groups.containsKey(tier)) ...[
-                    _TierHeader(tier: tier, count: groups[tier]!.length),
-                    for (final t in groups[tier]!)
-                      _ListTileTask(
-                        task: t,
-                        onTap: () => _openForm(context, initial: t),
-                        onDelete: () => _delete(context, t),
-                      ),
-                  ],
-              ],
-            ),
+      body: SafeArea(
+        top: false,
+        child: RefreshIndicator(
+          onRefresh: () => controller.refresh(),
+          color: AppColors.medium,
+          backgroundColor: AppColors.surface,
+          child: dayTasks.isEmpty
+              ? const _EmptyList()
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+                  itemCount: dayTasks.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (context, i) {
+                    final t = dayTasks[i];
+                    return _AnimatedTaskTile(
+                      key: ValueKey(t.id),
+                      index: i,
+                      task: t,
+                      onTap: () => _openForm(context, initial: t),
+                      onDelete: () => _delete(context, t),
+                    );
+                  },
+                ),
+        ),
+      ),
     );
   }
 }
@@ -163,77 +159,97 @@ class _EmptyList extends StatelessWidget {
   }
 }
 
-class _TierHeader extends StatelessWidget {
-  final int tier;
-  final int count;
-
-  const _TierHeader({required this.tier, required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = tier == 1
-        ? AppColors.high
-        : tier == 2
-        ? AppColors.medium
-        : AppColors.low;
-    final title = tier == 1
-        ? 'TIER 1 \u00b7 HIGH'
-        : tier == 2
-        ? 'TIER 2 \u00b7 MEDIUM'
-        : 'TIER 3 \u00b7 LOW';
-    return Padding(
-      padding: const EdgeInsets.only(top: 16, bottom: 8),
-      child: Row(
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: AppTheme.bodyMuted.copyWith(
-              fontFamily: AppTheme.monoStack,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            '$count',
-            style: AppTheme.mono.copyWith(
-              fontSize: 11,
-              color: AppColors.textMuted,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ListTileTask extends StatelessWidget {
+class _AnimatedTaskTile extends StatefulWidget {
+  final int index;
   final Task task;
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
-  const _ListTileTask({
+  const _AnimatedTaskTile({
+    super.key,
+    required this.index,
     required this.task,
     required this.onTap,
     required this.onDelete,
   });
 
   @override
+  State<_AnimatedTaskTile> createState() => _AnimatedTaskTileState();
+}
+
+class _AnimatedTaskTileState extends State<_AnimatedTaskTile> {
+  bool _entered = false;
+  bool _removing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Stagger the entrance so the list pops in row by row.
+    Future.delayed(Duration(milliseconds: widget.index * 40), () {
+      if (mounted) setState(() => _entered = true);
+    });
+  }
+
+  Future<void> _handleDelete() async {
+    if (_removing) return;
+    setState(() => _removing = true);
+    // Give the shrink/collapse animation time before the row is removed.
+    await Future.delayed(const Duration(milliseconds: 240));
+    widget.onDelete();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final tier = task.isLocked
+    final tier = widget.task.isLocked
         ? AppColors.lockedBorder
-        : AppColors.forPriority(task.priority);
+        : AppColors.forPriority(widget.task.priority);
+
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOut,
+      opacity: _removing ? 0 : (_entered ? 1 : 0),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeInOut,
+        child: _TileContent(
+          task: widget.task,
+          tier: tier,
+          removing: _removing,
+          onTap: widget.onTap,
+          onDelete: _handleDelete,
+        ),
+      ),
+    );
+  }
+}
+
+class _TileContent extends StatelessWidget {
+  final Task task;
+  final Color tier;
+  final bool removing;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  const _TileContent({
+    required this.task,
+    required this.tier,
+    required this.removing,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
         margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+        transform: removing
+            ? Matrix4.diagonal3Values(1, 0, 1)
+            : Matrix4.identity(),
+        alignment: Alignment.topLeft,
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(14),

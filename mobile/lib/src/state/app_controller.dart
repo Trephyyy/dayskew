@@ -21,6 +21,7 @@ class AppController extends ChangeNotifier {
   List<Task> _conflicts = [];
   int _wakeTime = 7 * 60; // default 07:00
   DateTime _selectedDate = DateTime.now();
+  int _scheduleVersion = 0;
   bool _loading = false;
   bool _reflowing = false;
   String? _error;
@@ -31,6 +32,10 @@ class AppController extends ChangeNotifier {
   int get wakeTime => _wakeTime;
   DateTime get selectedDate => _selectedDate;
   String get selectedDateIso => TimeFormat.isoDate(_selectedDate);
+
+  /// Bumped every time the schedule is recomputed, so views can animate on
+  /// each refresh/update.
+  int get scheduleVersion => _scheduleVersion;
   bool get loading => _loading;
   bool get reflowing => _reflowing;
   String? get error => _error;
@@ -91,6 +96,7 @@ class AppController extends ChangeNotifier {
       final result = await api.schedule(_wakeTime, date: selectedDateIso);
       _timeline = result.timeline;
       _conflicts = result.conflicts;
+      _scheduleVersion++;
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -107,6 +113,7 @@ class AppController extends ChangeNotifier {
       final result = await api.schedule(_wakeTime, date: selectedDateIso);
       _timeline = result.timeline;
       _conflicts = result.conflicts;
+      _scheduleVersion++;
       _error = null;
     } catch (e) {
       _error = e.toString();
