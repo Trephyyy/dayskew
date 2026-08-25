@@ -6,7 +6,7 @@ Monorepo for the dayskew platform.
 
 - `backend/` — Go REST API (`cmd/`, `internal/`, sqlx migrations in `db/`)
 - `webapp/` — web frontend (empty)
-- `mobile/` — mobile app (empty)
+- `mobile/` — Flutter app (Android / iOS / web / desktop)
 - `shared/` — OpenAPI / JSON shared types and contracts
 
 ## Quick start

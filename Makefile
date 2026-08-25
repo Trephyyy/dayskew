@@ -9,11 +9,11 @@ GO     := go
 all: build test
 
 build:
-	@$(GO) build -o backend/out/server backend/cmd/server
-	@$(GO) build -o backend/out/migrate backend/cmd/migrate
+	@cd backend && $(GO) build -o out/server ./cmd/server
+	@cd backend && $(GO) build -o out/migrate ./cmd/migrate
 
 test:
-	@$(GO) test ./backend
+	@cd backend && $(GO) test ./...
 
 run: build
 	@backend/out/server
