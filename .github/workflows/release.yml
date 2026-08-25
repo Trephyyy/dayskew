@@ -1,0 +1,45 @@
+name: Release Mobile APK
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build APK
+        working-directory: mobile
+        run: flutter build apk --release
+
+      - name: Rename artifact with tag name
+        run: |
+          cp mobile/build/app/outputs/flutter-apk/app-release.apk \
+             DaySkew-${{ github.ref_name }}.apk
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: DaySkew ${{ github.ref_name }}
+          body: |
+            ## DaySkew Mobile App
+
+            Android APK for release ${{ github.ref_name }}.
+
+            - Constraint-based reflow scheduler UI (wake-up hero, timeline, Bump Zone)
+            - Points to the live backend at https://dayskew.danailmihov.com/api
+            - Neo-brutal / retro-arcade design system
+
+            Download `DaySkew-${{ github.ref_name }}.apk` and install on any Android device.
+          files: DaySkew-${{ github.ref_name }}.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
